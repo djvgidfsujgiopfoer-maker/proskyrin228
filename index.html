@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Тапай персонажа</title>
+<style>
+html, body {
+  height: 100%;
+  margin: 0;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  background: url('background.jpg') no-repeat center bottom;
+  background-size: cover;
+  font-family: Arial, sans-serif;
+  overflow: hidden;
+  user-select: none;
+}
+
+body, #character {
+  touch-action: manipulation;
+}
+
+#gameWrap {
+  position: relative;
+  width: 90vw;
+  max-width: 400px;
+  text-align: center;
+  margin-bottom: -4px;
+  overflow: visible;
+}
+
+#counter {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 8px;
+  font-weight: bold;
+  font-size: clamp(16px, 4vw, 32px);
+  color: #ffb700;
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.4);
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 10;
+}
+
+#characterWrapper {
+  display: inline-block;
+  transition: transform 0.12s ease;
+  overflow: visible;
+}
+
+#character {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: none;
+  cursor: pointer;
+  -webkit-user-drag: none;
+  user-drag: none;
+}
+
+.coin {
+  position: absolute;
+  font-size: clamp(14px, 4vw, 24px);
+  font-weight: bold;
+  color: gold;
+  pointer-events: none;
+  animation: coinAnim 0.8s forwards;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+}
+
+@keyframes coinAnim {
+  0%   {opacity:1; transform:translate(0,0) scale(1);}
+  40%  {transform:translate(0,-26px) scale(1.4);}
+  80%  {transform:translate(0,-48px) scale(1.1); opacity:0.6;}
+  100% {transform:translate(0,-70px) scale(0.6); opacity:0;}
+}
+
+/* Загрузочный экран на весь экран */
+#loader {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw; /* Занимает всю ширину экрана */
+  height: 100vh; /* Занимает всю высоту экрана */
+  background: #000;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+}
+
+#loader video {
+  width: 50%;
+  max-width: 300px;
+}
+</style>
+</head>
+<body>
+
+<div id="loader">
+  <video autoplay muted playsinline>
+    <source src="pivko.mp4" type="video/mp4">
+    Ваш браузер не поддерживает видео.
+  </video>
+</div>
+
+<div id="gameWrap">
+  <div id="characterWrapper">
+    <img id="character" src="obichni.png" alt="Персонаж">
+  </div>
+  <div id="counter">🐷 Свинкойнов: 0</div>
+</div>
+
+<script>
+(function() {
+  const ch = document.getElementById('character');
+  const wrapper = document.getElementById('characterWrapper');
+  const counter = document.getElementById('counter');
+  const wrap = document.getElementById('gameWrap');
+  const loader = document.getElementById('loader');
+
+  const normal = 'obichni.png';
+  const press = 'jmy.png';
+
+  // --- Пул звуков для мгновенного отклика ---
+  const SOUND_POOL_SIZE = 10;
+  const tapSounds = Array.from({ length: SOUND_POOL_SIZE }, () => {
+    const a = new Audio('tap.mp3');
+    a.volume = 0.7;
+    return a;
+  });
+  let soundIndex = 0;
+
+  function playTapSound() {
+    const sound = tapSounds[soundIndex];
+    sound.pause();
+    sound.currentTime = 0;
+    sound.play().catch(() => {});
+    soundIndex = (soundIndex + 1) % SOUND_POOL_SIZE;
+  }
+  // ------------------------------------------
+
+  let score = parseInt(localStorage.getItem('svinkoini')) || 0;
+  counter.textContent = '🐷 Свинкойнов: ' + score;
+
+  function createPlus(x, y) {
+    const el = document.createElement('div');
+    el.className = 'coin';
+    el.textContent = '+1';
+    el.style.left = (x - wrap.getBoundingClientRect().left) + 'px';
+    el.style.top = (y - wrap.getBoundingClientRect().top) + 'px';
+    wrap.appendChild(el);
+    setTimeout(() => el.remove(), 800);
+  }
+
+  function doTap(x, y, times) {
+    for (let i = 0; i < times; i++) {
+      score++;
+      createPlus(x, y);
+      playTapSound();
+    }
+    localStorage.setItem('svinkoini', score);
+    counter.textContent = '🐷 Свинкойнов: ' + score;
+
+    wrapper.style.transform = 'scale(1.08)';
+    ch.src = press;
+    setTimeout(() => {
+      wrapper.style.transform = '';
+      ch.src = normal;
+    }, 140);
+  }
+
+  // --- Определяем: телефон или ПК ---
+  const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+
+  if (isTouchDevice) {
+    // Только touchstart для сенсорных
+    ch.addEventListener('touchstart', e => {
+      let tcount = e.touches.length;
+      if (tcount > 6) tcount = 6;
+      const touch = e.touches[0];
+      doTap(touch.clientX, touch.clientY, tcount);
+      e.preventDefault();
+    }, { passive: false });
+  } else {
+    // Только pointerdown для ПК
+    ch.addEventListener('pointerdown', e => {
+      doTap(e.clientX, e.clientY, 1);
+      e.preventDefault();
+    });
+  }
+
+  // Запрещаем масштабирование
+  document.addEventListener('touchstart', e => {
+    if (e.touches.length > 1) e.preventDefault();
+  }, { passive: false });
+
+  // Показать игру после загрузки
+  window.addEventListener('load', () => {
+    setTimeout(() => {
+      loader.style.display = 'none'; // Скрываем загрузочный экран
+    }, 4000); // Задержка в 4 секунды
+  });
+})();
+</script>
+
+</body>
+</html>
